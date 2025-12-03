@@ -1,7 +1,10 @@
+import asyncio
 import logging
+from typing import Any, Dict
+
 import voluptuous as vol
 
-from homeassistant.const import CONF_HOST, CONF_PORT
+from homeassistant.const import CONF_HOST, CONF_PORT, EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant
 import homeassistant.helpers.config_validation as cv
 
@@ -40,8 +43,18 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     client = KaleidescapeClient(host, port=port)
 
-    # 🔴 Adjust this to match your event dict shape
-    def _handle_event(evt: dict) -> None:
+    # Event used to keep the runner alive until HA is stopping
+    stop_event: asyncio.Event = asyncio.Event()
+
+    async def _async_stop(event: Any) -> None:
+        """Handle Home Assistant stop to shut down the client cleanly."""
+        _LOGGER.info("Stopping Kaleidescape volume bridge for %s:%s", host, port)
+        stop_event.set()
+
+    # When Home Assistant is shutting down, notify our runner
+    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _async_stop)
+
+    def _handle_event(evt: Dict[str, Any]) -> None:
         """
         Expected example evt from your fork:
 
@@ -75,23 +88,28 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         try:
             await client.connect()
 
-            # Enable the volume events
+            # Enable the volume events if available on your fork
             if hasattr(client, "enable_volume_events"):
                 try:
                     await client.enable_volume_events()
                     _LOGGER.info("Requested Kaleidescape volume events")
-                except Exception:
+                except Exception:  # noqa: BLE001
                     _LOGGER.exception("Failed to enable volume events")
 
-            # Replace this with whatever your client uses to keep reading
-            if hasattr(client, "run_forever"):
-                await client.run_forever()
-            else:
-                # Fallback: keep the connection alive yourself if needed
-                while True:
-                    await client.poll()  # or similar
-        except Exception:
-            _LOGGER.exception("Kaleidescape volume bridge crashed")
+            # Keep the connection open until Home Assistant is stopping.
+            await stop_event.wait()
 
-    hass.loop.create_task(_runner())
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("Kaleidescape volume bridge crashed")
+        finally:
+            # Try to disconnect/close cleanly on shutdown.
+            try:
+                if hasattr(client, "disconnect"):
+                    await client.disconnect()
+                elif hasattr(client, "close"):
+                    await client.close()
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("Error while closing Kaleidescape client")
+
+    hass.async_create_task(_runner())
     return True
