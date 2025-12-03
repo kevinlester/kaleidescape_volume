@@ -8,9 +8,7 @@ from homeassistant.const import CONF_HOST, CONF_PORT, EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant
 import homeassistant.helpers.config_validation as cv
 
-# ⬇️ Adjust this import to match your fork
-# e.g. from pykaleidescape import KaleidescapeClient
-from pykaleidescape import KaleidescapeClient
+from kaleidescape import Device as KaleidescapeDevice
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,13 +39,13 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     _LOGGER.info("Starting Kaleidescape volume bridge for %s:%s", host, port)
 
-    client = KaleidescapeClient(host, port=port)
+    device = KaleidescapeDevice(host, port=port)
 
     # Event used to keep the runner alive until HA is stopping
     stop_event: asyncio.Event = asyncio.Event()
 
     async def _async_stop(event: Any) -> None:
-        """Handle Home Assistant stop to shut down the client cleanly."""
+        """Handle Home Assistant stop to shut down the device cleanly."""
         _LOGGER.info("Stopping Kaleidescape volume bridge for %s:%s", host, port)
         stop_event.set()
 
@@ -82,16 +80,16 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             {"event": name},
         )
 
-    client.add_event_listener(_handle_event)
+    device.add_event_listener(_handle_event)
 
     async def _runner() -> None:
         try:
-            await client.connect()
+            await device.connect()
 
             # Enable the volume events if available on your fork
-            if hasattr(client, "enable_volume_events"):
+            if hasattr(device, "enable_volume_events"):
                 try:
-                    await client.enable_volume_events()
+                    await device.enable_volume_events()
                     _LOGGER.info("Requested Kaleidescape volume events")
                 except Exception:  # noqa: BLE001
                     _LOGGER.exception("Failed to enable volume events")
@@ -104,12 +102,12 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         finally:
             # Try to disconnect/close cleanly on shutdown.
             try:
-                if hasattr(client, "disconnect"):
-                    await client.disconnect()
-                elif hasattr(client, "close"):
-                    await client.close()
+                if hasattr(device, "disconnect"):
+                    await device.disconnect()
+                elif hasattr(device, "close"):
+                    await device.close()
             except Exception:  # noqa: BLE001
-                _LOGGER.exception("Error while closing Kaleidescape client")
+                _LOGGER.exception("Error while closing Kaleidescape device")
 
     hass.async_create_task(_runner())
     return True
