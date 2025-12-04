@@ -2,7 +2,8 @@
 Minimal Home Assistant custom integration to enable a Kaleidescape remote to control another components volume.  Your Kaleidescape's remote must have volume buttons, of course.
 
 ## Installation
-1). Install via HACS.  
+1). Install via HACS: [![Open this repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=kevinlester&repository=kaleidescape_volume&category=integration)
+
 2). Add the IP or hostname of your Kaleidescape to the configuration.yaml like so
 
 ```
