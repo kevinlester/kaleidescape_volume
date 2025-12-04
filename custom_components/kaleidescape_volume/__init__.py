@@ -40,58 +40,31 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     _LOGGER.info("Starting Kaleidescape volume bridge for %s:%s", host, port)
 
     device = KaleidescapeDevice(host, port=port)
-    
-    import kaleidescape as kale_lib
-
-    _LOGGER.info(
-        "kaleidescape module loaded from %s; version=%s; has_enable_volume_events=%s",
-        getattr(kale_lib, "__file__", "unknown"),
-        getattr(kale_lib, "__version__", "unknown"),
-        hasattr(KaleidescapeDevice, "enable_volume_events"),
-    )
 
     connection = None  # dispatcher connection, set after connect()
 
     def _handle_event(event: str) -> None:
         """
         Handle events from the Kaleidescape dispatcher.
-
-        Your fork's test script uses:
-            device.dispatcher.connect(log_event)
-
-        where `event` is likely a raw line like:
-            "USER_DEFINED_EVENT:VOLUME_UP_PRESS"
-
-        This handler also tolerates a dict shape just in case your fork
-        wraps events differently later.
         """
         name: str | None = None
         evt_type: str | None = None
         
         _LOGGER.debug("Received event[%s]: %s", type(event), event)
         
-        # Dict-style event (future-proofing / alternative implementation)
-        if isinstance(event, dict):
-            evt_type = str(event.get("type") or "").upper()
-            if evt_type != "USER_DEFINED_EVENT":
-                return
-            name = str(event.get("name") or "").upper()
-        else:
-            # Assume this is the raw event line from the control protocol.
-            text = str(event).strip()
-            if not text:
-                return
+        text = str(event).strip()
+        if not text:
+            return
 
-            parts = text.split(":", 1)
-            if len(parts) != 2:
-                return
+        parts = text.split(":", 1)
+        if len(parts) != 2:
+            return
 
-            evt_type = parts[0].strip().upper()
-            if evt_type != "USER_DEFINED_EVENT":
-                return
+        evt_type = parts[0].strip().upper()
+        if evt_type != "USER_DEFINED_EVENT":
+            return
 
-            name = parts[1].strip().upper()
-
+        name = parts[1].strip().upper()
         if not name:
             return
 
