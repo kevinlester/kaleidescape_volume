@@ -4,9 +4,7 @@
   "version": "0.1.0",
   "documentation": "https://github.com/kevinlester/ha-kaleidescape-volume",
   "issue_tracker": "https://github.com/kevinlester/ha-kaleidescape-volume/issues",
-  "requirements": [
-    "pykaleidescape @ git+https://github.com/kevinlester/pykaleidescape@add-user-defined-events"
-  ],
+  "requirements": [],
   "dependencies": [],
   "codeowners": ["@kevinlester"],
   "iot_class": "local_push"
