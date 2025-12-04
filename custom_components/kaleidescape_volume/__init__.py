@@ -10,9 +10,22 @@ import homeassistant.helpers.config_validation as cv
 
 from .pykaleidescape_fork.kaleidescape import Device as KaleidescapeDevice
 
+from .bridge import (
+    connect_device,
+    connect_dispatcher,
+    enable_volume_events_if_supported,
+    disconnect_dispatcher,
+    disconnect_device,
+)
+
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "kaleidescape_volume"
+
+# Volume event constants
+VOLUME_EVENT_TYPE = "USER_DEFINED_EVENT"
+VOLUME_PREFIX = "VOLUME_"
+VOLUME_SUFFIX = "_PRESS"
 
 CONFIG_SCHEMA = vol.Schema(
     {
@@ -40,35 +53,24 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     _LOGGER.info("Starting Kaleidescape volume bridge for %s:%s", host, port)
 
     device = KaleidescapeDevice(host, port=port)
+    connection: Any | None = None
 
-    connection = None  # dispatcher connection, set after connect()
-
-    def _handle_event(event: str) -> None:
-        """
-        Handle events from the Kaleidescape dispatcher.
-        """
-        name: str | None = None
-        evt_type: str | None = None
-        
-        _LOGGER.debug("Received event[%s]: %s", type(event), event)
-        
+    def _handle_event(event: Any) -> None:
+        # your cleaned-up event handler from earlier
         text = str(event).strip()
         if not text:
             return
 
-        parts = text.split(":", 1)
-        if len(parts) != 2:
+        _LOGGER.debug("Received Kaleidescape event: %r", text)
+
+        try:
+            evt_type, name = (p.strip().upper() for p in text.split(":", 1))
+        except ValueError:
             return
 
-        evt_type = parts[0].strip().upper()
         if evt_type != "USER_DEFINED_EVENT":
             return
 
-        name = parts[1].strip().upper()
-        if not name:
-            return
-
-        # Only care about volume button "PRESS" events
         if not (name.startswith("VOLUME_") and name.endswith("_PRESS")):
             return
 
@@ -82,67 +84,20 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     async def _async_stop(event: Any) -> None:
         """Handle Home Assistant stop to shut down the device cleanly."""
         _LOGGER.info("Stopping Kaleidescape volume bridge for %s:%s", host, port)
-
-        # First, disconnect from the dispatcher (unsubscribe listener)
         nonlocal connection
-        if connection is not None:
-            try:
-                disconnect = getattr(connection, "disconnect", None)
-                if callable(disconnect):
-                    disconnect()
-                    _LOGGER.debug("Disconnected Kaleidescape dispatcher listener")
-            except Exception:  # noqa: BLE001
-                _LOGGER.exception(
-                    "Error while disconnecting Kaleidescape dispatcher listener"
-                )
-            finally:
-                connection = None
+        disconnect_dispatcher(connection)
+        connection = None
+        await disconnect_device(device)
 
-        # Then, close the device connection
-        try:
-            if hasattr(device, "disconnect"):
-                await device.disconnect()
-            elif hasattr(device, "close"):
-                await device.close()
-        except Exception:  # noqa: BLE001
-            _LOGGER.exception("Error while closing Kaleidescape device")
-
-    # Register shutdown callback first so we always clean up
+    # Ensure we always clean up on shutdown
     hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _async_stop)
 
-    # Now connect to the device and set up dispatcher listener
-    try:
-        await device.connect()
-        _LOGGER.info("Connected to Kaleidescape at %s:%s", host, port)
-    except Exception:  # noqa: BLE001
-        _LOGGER.exception("Failed to connect to Kaleidescape device")
+    # Connect device + dispatcher, then enable volume events
+    if not await connect_device(device, host, port):
         # Don't crash HA startup; just skip the bridge
         return False
 
-    dispatcher = getattr(device, "dispatcher", None)
-    if dispatcher is not None and hasattr(dispatcher, "connect"):
-        try:
-            connection = dispatcher.connect(_handle_event)
-            _LOGGER.debug("Connected Kaleidescape dispatcher listener")
-        except Exception:  # noqa: BLE001
-            _LOGGER.exception("Failed to connect Kaleidescape dispatcher")
-    else:
-        _LOGGER.warning(
-            "Kaleidescape device has no 'dispatcher'; "
-            "volume button events will not be received."
-        )
-            
-    # Enable the volume events if available on your fork
-    if hasattr(device, "enable_volume_events"):
-        try:
-            await device.enable_volume_events()
-            _LOGGER.info("Requested Kaleidescape volume events")
-        except Exception:  # noqa: BLE001
-            _LOGGER.exception("Failed to enable volume events")
-    else:
-        _LOGGER.info(
-            "not requesting volume events."
-        )
-    # No long-running task here; HA's loop stays alive, and pykaleidescape
-    # manages its own internal tasks.
+    connection = connect_dispatcher(device, _handle_event)
+    await enable_volume_events_if_supported(device)
+
     return True
