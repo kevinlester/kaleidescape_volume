@@ -55,18 +55,19 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     device = KaleidescapeDevice(host, port=port)
     connection: Any | None = None
 
-    def _handle_event(event: Any) -> None:
-        # your cleaned-up event handler from earlier
+    def _handle_event(event: str) -> None:
+        """Handle events from the Kaleidescape dispatcher."""
         text = str(event).strip()
         if not text:
             return
 
         _LOGGER.debug("Received Kaleidescape event: %r", text)
 
-        try:
-            evt_type, name = (p.strip().upper() for p in text.split(":", 1))
-        except ValueError:
+        parts = text.split(":", 1)
+        if len(parts) != 2:
             return
+
+        evt_type, name = (p.strip().upper() for p in parts)
 
         if evt_type != "USER_DEFINED_EVENT":
             return
@@ -80,6 +81,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             "kaleidescape_volume_button",
             {"event": name},
         )
+
 
     async def _async_stop(event: Any) -> None:
         """Handle Home Assistant stop to shut down the device cleanly."""
