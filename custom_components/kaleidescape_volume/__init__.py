@@ -22,10 +22,10 @@ _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "kaleidescape_volume"
 
-# Volume event constants
-VOLUME_EVENT_TYPE = "USER_DEFINED_EVENT"
-VOLUME_PREFIX = "VOLUME_"
-VOLUME_SUFFIX = "_PRESS"
+VOLUME_EVENTS = {
+    "USER_DEFINED_EVENT:VOLUME_UP_PRESS",
+    "USER_DEFINED_EVENT:VOLUME_DOWN_PRESS"
+}
 
 CONFIG_SCHEMA = vol.Schema(
     {
@@ -54,29 +54,19 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     device = KaleidescapeDevice(host, port=port)
     connection: Any | None = None
-
+    
+    
     def _handle_event(event: str) -> None:
-        """Handle events from the Kaleidescape dispatcher."""
-        text = str(event).strip()
-        if not text:
+        """Handle only the Kaleidescape volume button events."""
+        text_upper = str(event).strip().upper()
+    
+        if text_upper not in VOLUME_EVENTS:
             return
-
-        _LOGGER.debug("Received Kaleidescape event: %r", text)
-
-        parts = text.split(":", 1)
-        if len(parts) != 2:
-            return
-
-        evt_type, name = (p.strip().upper() for p in parts)
-
-        if evt_type != "USER_DEFINED_EVENT":
-            return
-
-        if not (name.startswith("VOLUME_") and name.endswith("_PRESS")):
-            return
-
+    
+        _, name = text_upper.split(":", 1)
+    
         _LOGGER.debug("Kaleidescape volume event: %s", name)
-
+    
         hass.bus.fire(
             "kaleidescape_volume_button",
             {"event": name},
