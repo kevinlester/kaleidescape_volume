@@ -22,13 +22,16 @@ _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "kaleidescape_volume"
 
+
+CONF_REPEAT_INTERVAL = "repeat_interval"
+DEFAULT_REPEAT_INTERVAL = 0.25 # default seconds between repeated HA events
+
 VOLUME_EVENTS = {
     "USER_DEFINED_EVENT:VOLUME_UP_PRESS",
     "USER_DEFINED_EVENT:VOLUME_UP_RELEASE",
     "USER_DEFINED_EVENT:VOLUME_DOWN_PRESS",
     "USER_DEFINED_EVENT:VOLUME_DOWN_RELEASE",
 }
-VOLUME_REPEAT_INTERVAL = 0.25  # seconds between repeated HA events
 
 CONFIG_SCHEMA = vol.Schema(
     {
@@ -36,6 +39,13 @@ CONFIG_SCHEMA = vol.Schema(
             {
                 vol.Required(CONF_HOST): cv.string,
                 vol.Optional(CONF_PORT, default=10000): cv.port,
+                vol.Optional(
+                    CONF_REPEAT_INTERVAL,
+                    default=DEFAULT_REPEAT_INTERVAL,
+                ): vol.All(
+                    vol.Coerce(float),
+                    vol.Range(min=0.05, max=2.0),
+                ),
             }
         )
     },
@@ -52,12 +62,18 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     host = conf[CONF_HOST]
     port = conf[CONF_PORT]
+    repeat_interval = conf[CONF_REPEAT_INTERVAL]
 
-    _LOGGER.info("Starting Kaleidescape volume bridge for %s:%s", host, port)
-
+    _LOGGER.info(
+        "Starting Kaleidescape volume bridge for %s:%s (repeat_interval=%.3f)",
+        host,
+        port,
+        repeat_interval,
+    )
+    
     device = KaleidescapeDevice(host, port=port)
     connection: Any | None = None
-    repeat_mgr = VolumeRepeatManager(hass, VOLUME_REPEAT_INTERVAL)
+    repeat_mgr = VolumeRepeatManager(hass, repeat_interval)
 
     
     def _handle_event(event: str) -> None:

@@ -4,12 +4,14 @@ Minimal Home Assistant custom integration to enable a Kaleidescape remote to con
 ## Installation
 1). Install via HACS: [![Open this repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=kevinlester&repository=kaleidescape_volume&category=integration)
 
-2). Add the IP or hostname of your Kaleidescape to the configuration.yaml like so
+2). Add the IP or hostname of your Kaleidescape to the configuration.yaml like so [you can also tweak how
+    fast the volume changes when holding down the volume up/down button]:
 
 ```
 kaleidescape_volume:
-  host: 192.168.X.X  # Strato V IP
-  port: 10000
+  host: 192.168.X.X     # Kaleidescape IP/hostname
+  port: 10000           # [Optional]
+  repeat_interval: .25  # [Optional] seconds between volume steps when holding up/down button
 ```
 
 3). If you wish to enable logs for it, then add the following to your configuration.yaml
