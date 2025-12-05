@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 import homeassistant.helpers.config_validation as cv
 
 from .pykaleidescape_fork.kaleidescape import Device as KaleidescapeDevice
-
+from .volume_repeat import VolumeRepeatManager
 from .bridge import (
     connect_device,
     connect_dispatcher,
@@ -24,8 +24,11 @@ DOMAIN = "kaleidescape_volume"
 
 VOLUME_EVENTS = {
     "USER_DEFINED_EVENT:VOLUME_UP_PRESS",
-    "USER_DEFINED_EVENT:VOLUME_DOWN_PRESS"
+    "USER_DEFINED_EVENT:VOLUME_UP_RELEASE",
+    "USER_DEFINED_EVENT:VOLUME_DOWN_PRESS",
+    "USER_DEFINED_EVENT:VOLUME_DOWN_RELEASE",
 }
+VOLUME_REPEAT_INTERVAL = 0.25  # seconds between repeated HA events
 
 CONFIG_SCHEMA = vol.Schema(
     {
@@ -54,7 +57,8 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     device = KaleidescapeDevice(host, port=port)
     connection: Any | None = None
-    
+    repeat_mgr = VolumeRepeatManager(hass, VOLUME_REPEAT_INTERVAL)
+
     
     def _handle_event(event: str) -> None:
         """Handle only the Kaleidescape volume button events."""
@@ -67,16 +71,30 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     
         _LOGGER.debug("Kaleidescape volume event: %s", name)
     
-        hass.bus.fire(
+        hass.bus.async_fire(
             "kaleidescape_volume_button",
             {"event": name},
         )
+
+        # Start / stop repeating PRESS events
+        if name == "VOLUME_UP_PRESS":
+            repeat_mgr.start("VOLUME_UP_PRESS")
+        elif name == "VOLUME_UP_RELEASE":
+            repeat_mgr.stop("VOLUME_UP_PRESS")
+        elif name == "VOLUME_DOWN_PRESS":
+            repeat_mgr.start("VOLUME_DOWN_PRESS")
+        elif name == "VOLUME_DOWN_RELEASE":
+            repeat_mgr.stop("VOLUME_DOWN_PRESS")
 
 
     async def _async_stop(event: Any) -> None:
         """Handle Home Assistant stop to shut down the device cleanly."""
         _LOGGER.info("Stopping Kaleidescape volume bridge for %s:%s", host, port)
         nonlocal connection
+
+        # Stop any ongoing repeat tasks
+        repeat_mgr.stop_all()
+
         disconnect_dispatcher(connection)
         connection = None
         await disconnect_device(device)
