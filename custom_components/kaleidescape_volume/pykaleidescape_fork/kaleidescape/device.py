@@ -11,11 +11,19 @@ from . import message as messages
 from .connection import Connection
 from .dispatcher import Dispatcher
 
+T = TypeVar("T")
+
+
+def _cast(typ: type[T], result: object) -> T:  # pylint: disable=unused-argument
+    """Shorthand for cast to reduce verbosity in multi-result unpacking."""
+    return cast(T, result)
+
+
 if TYPE_CHECKING:
     from .dispatcher import Signal
     from .message import Request, Response
 
-    RequestType = TypeVar("RequestType", bound=Request)
+    RequestT = TypeVar("RequestT", bound=Request)
 
 
 class Device:
@@ -68,23 +76,23 @@ class Device:
             reconnect_delay=self._reconnect_delay,
         )
 
-        result = iter(
-            await asyncio.gather(
-                self._get_device_info(),
-                self._get_system_version(),
-                self._get_device_type_name(),
-                self._get_num_zones(),
-                self._get_device_power_state(),
-                self._get_system_readiness_state(),
-            )
+        results = await asyncio.gather(
+            self._get_device_info(),
+            self._get_system_version(),
+            self._get_device_type_name(),
+            self._get_num_zones(),
+            self._get_device_power_state(),
+            self._get_system_readiness_state(),
         )
 
-        self._update_device_info(next(result))
-        self._update_system_version(next(result))
-        self._update_device_type_name(next(result))
-        self._update_num_zones(next(result))
-        self._update_device_power_state(next(result))
-        self._update_system_readiness_state(next(result))
+        self._update_device_info(cast(messages.DeviceInfo, results[0]))
+        self._update_system_version(cast(messages.SystemVersion, results[1]))
+        self._update_device_type_name(cast(messages.DeviceTypeName, results[2]))
+        self._update_num_zones(cast(messages.NumZones, results[3]))
+        self._update_device_power_state(cast(messages.DevicePowerState, results[4]))
+        self._update_system_readiness_state(
+            cast(messages.SystemReadinessState, results[5])
+        )
 
         if self.is_movie_player:
             # Server only devices don't support this call
@@ -106,27 +114,27 @@ class Device:
         if self.power.state != const.DEVICE_POWER_STATE_ON:
             return
 
-        result = iter(
-            await asyncio.gather(
-                self._get_ui_state(),
-                self._get_highlighted_selection(),
-                self._get_play_status(),
-                self._get_movie_location(),
-                self._get_screen_mask(),
-                self._get_screen_mask2(),
-                self._get_cinemascape_mode(),
-            )
+        results = await asyncio.gather(
+            self._get_ui_state(),
+            self._get_highlighted_selection(),
+            self._get_play_status(),
+            self._get_movie_location(),
+            self._get_screen_mask(),
+            self._get_screen_mask2(),
+            self._get_cinemascape_mode(),
         )
 
-        self._update_ui_state(next(result))
-        self._update_highlighted_selection(next(result))
-        self._update_play_status(next(result))
-        self._update_movie_location(next(result))
-        self._update_screen_mask(next(result))
-        self._update_screen_mask2(next(result))
-        self._update_cinemascape_mode(next(result))
+        self._update_ui_state(_cast(messages.UiState, results[0]))
+        self._update_highlighted_selection(
+            _cast(messages.HighlightedSelection, results[1])
+        )
+        self._update_play_status(_cast(messages.PlayStatus, results[2]))
+        self._update_movie_location(_cast(messages.MovieLocation, results[3]))
+        self._update_screen_mask(_cast(messages.ScreenMask, results[4]))
+        self._update_screen_mask2(_cast(messages.ScreenMask2, results[5]))
+        self._update_cinemascape_mode(_cast(messages.CinemascapeMode, results[6]))
 
-        if self.movie.play_status != const.PLAY_STATUS_NONE:
+        if self.movie.play_status != const.PLAY_STATUS_NONE and self.osd.highlighted:
             res1 = await self.get_content_details(self.osd.highlighted)
             self._update_content_details(cast(messages.ContentDetailsOverview, res1))
 
@@ -173,16 +181,6 @@ class Device:
     async def stop(self) -> None:
         """Send stop command."""
         await self._send(messages.Stop)
-
-    async def enable_volume_events(self) -> None:
-        """Request the player to publish volume/user-defined events.
-
-        The device only emits volume-related user-defined events after the
-        `SEND_EVENT:VOLUME_CAPABILITIES=15` command is issued. Safe to call
-        repeatedly; the device treats it as idempotent.
-        """
-
-        await self._send(messages.EnableVolumeEvents)
 
     async def next(self) -> None:
         """Send next command."""
@@ -235,6 +233,38 @@ class Device:
     async def menu_toggle(self) -> None:
         """Send menu toggle command."""
         await self._send(messages.MenuToggle)
+
+    async def set_volume_capabilities(self, value: int) -> None:
+        """Send volume capabilities event."""
+        if not isinstance(value, int):
+            raise TypeError("Value must be an integer")
+        if value < 0 or value > 31:
+            raise ValueError("Value must be between 0 and 31 inclusive")
+        await self.send_event(
+            const.USER_DEFINED_EVENT_VOLUME_CAPABILITIES + f"={value}"
+        )
+
+    async def set_volume_level(self, level: int) -> None:
+        """Send volume level event."""
+        if not isinstance(level, int):
+            raise TypeError("Level must be an integer")
+        if level < 0 or level > 100:
+            raise ValueError("Level must be between 0 and 100 inclusive")
+        await self.send_event(f"{const.USER_DEFINED_EVENT_VOLUME_LEVEL}={level}")
+
+    async def set_volume_muted(self, muted: bool) -> None:
+        """Send volume muted event."""
+        if not isinstance(muted, bool):
+            raise TypeError("Muted must be a boolean")
+        await self.send_event(
+            const.USER_DEFINED_EVENT_MUTE_ON_FB
+            if muted
+            else const.USER_DEFINED_EVENT_MUTE_OFF_FB
+        )
+
+    async def send_event(self, value: str) -> None:
+        """Send user defined event."""
+        await self._send(messages.SendEvent, 0, [value])
 
     async def _get_device_info(self) -> messages.DeviceInfo:
         """Return device info."""
@@ -342,7 +372,7 @@ class Device:
         self.movie.chapter_location = res.field_chapter_location
 
     async def get_content_details(
-        self, handle: str, passcode: str = None
+        self, handle: str, passcode: str | None = None
     ) -> messages.ContentDetailsOverview:
         """Return content details for the currently selected title."""
         responses: list[Response] = await self._send_multi(
@@ -354,7 +384,7 @@ class Device:
         return overview
 
     def _update_content_details(
-        self, res: messages.ContentDetailsOverview = None
+        self, res: messages.ContentDetailsOverview | None = None
     ) -> None:
         self.movie.handle = res.field_handle if res else ""
         self.movie.title = res.field_title if res else ""
@@ -450,7 +480,7 @@ class Device:
         self.automation.cinemascape_mask = res.field
 
     async def _send(
-        self, request: type[RequestType], zone: int = 0, fields: list[str] | None = None
+        self, request: type[RequestT], zone: int = 0, fields: list[str] | None = None
     ) -> Response:
         """Send request to hardware, returning a single response."""
         res = await self._send_multi(request, zone, fields)
@@ -458,7 +488,7 @@ class Device:
         return res[0]
 
     async def _send_multi(
-        self, request: type[RequestType], zone: int = 0, fields: list[str] | None = None
+        self, request: type[RequestT], zone: int = 0, fields: list[str] | None = None
     ) -> list[Response]:
         """Send request to hardware, returning one or more responses."""
         req = request(zone, fields)
@@ -466,8 +496,7 @@ class Device:
 
     async def _handle_event(self, response: Response) -> None:
         """Handle events sent by hardware."""
-        dispatch_msg = response.name
-        
+
         # System
         if isinstance(response, messages.DevicePowerState):
             self._update_device_power_state(response)
@@ -519,12 +548,8 @@ class Device:
         elif isinstance(response, messages.CinemascapeMask):
             self._update_cinemascape_mask(response)
 
-        # User-defined / (e.g. volume events)
-        elif isinstance(response, messages.UserDefinedEvent):
-            dispatch_msg = f"{response.name}:{response.event_type}"
+        self._dispatcher.send(response.name, response.fields)
 
-        self._dispatcher.send(dispatch_msg)
-    
     @property
     def dispatcher(self) -> Dispatcher:
         """Return dispatcher instance."""

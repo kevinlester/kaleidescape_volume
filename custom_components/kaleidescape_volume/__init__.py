@@ -8,7 +8,7 @@ from homeassistant.const import CONF_HOST, CONF_PORT, EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant
 import homeassistant.helpers.config_validation as cv
 
-from .pykaleidescape_fork.kaleidescape import Device as KaleidescapeDevice
+from .pykaleidescape_fork.kaleidescape import Device as KaleidescapeDevice, const
 from .volume_repeat import VolumeRepeatManager
 from .bridge import (
     connect_device,
@@ -76,15 +76,13 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     repeat_mgr = VolumeRepeatManager(hass, repeat_interval)
 
     
-    def _handle_event(event: str) -> None:
+    def _handle_event(event: str, params: list[str] = None) -> None::
+
         """Handle only the Kaleidescape volume button events."""
-        text_upper = str(event).strip().upper()
-    
-        if text_upper not in VOLUME_EVENTS:
+        if event != const.USER_DEFINED_EVENT:
             return
     
-        _, name = text_upper.split(":", 1)
-    
+        name = params[0] # volume event name
         _LOGGER.debug("Kaleidescape volume event: %s", name)
     
         hass.bus.async_fire(

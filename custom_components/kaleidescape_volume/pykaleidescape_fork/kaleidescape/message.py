@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from . import const
 from .const import LOCAL_CPDID
@@ -237,9 +237,7 @@ class Request(Message):
 
     def __init__(self, zone: int = 0, fields: list[str] | None = None):
         """Initializes request."""
-        super().__init__(
-            LOCAL_CPDID, zone, fields=fields if fields is not None else fields
-        )
+        super().__init__(LOCAL_CPDID, zone, fields=fields)
 
         self.seq = -1
         self._type = MESSAGE_TYPE_REQUEST
@@ -358,7 +356,7 @@ class Response(Message):
         return const.RESPONSE_ERROR[self._status]
 
     @property
-    def fields(self) -> Any:
+    def fields(self) -> list[str]:
         """Returns fields in the message."""
         return self._fields
 
@@ -416,7 +414,7 @@ class SystemPairingInfo(Response):
         res: list[tuple[str, str]] = []
         for i in range(3, len(self._fields), 2):
             encore = f"{(self._fields[i].strip('#'))[-12:]:0>12}"
-            premier = f"{(self._fields[i+1].strip('#'))[-12:]:0>12}"
+            premier = f"{(self._fields[i + 1].strip('#'))[-12:]:0>12}"
             res.append((encore.upper(), premier.upper()))
         return res
 
@@ -539,12 +537,6 @@ class ZoneCapabilities(Response):
     def field_store(self) -> bool:
         """Returns whether it has store."""
         return self._fields[3] == "Y"
-
-
-class EnableVolumeEvents(Request):
-    """Request that enables volume/user-defined events from the device."""
-
-    name = f"SEND_EVENT:{const.VOLUME_CAPABILITIES}=15"
 
 
 class GetNumZones(Request):
@@ -849,23 +841,6 @@ class HighlightedSelection(Response):
     def field(self) -> str:
         """Returns highlighted selection."""
         return self._fields[0]
-
-
-@register
-class UserDefinedEvent(Response):
-    """Class for USER_DEFINED_EVENT messages."""
-
-    name = const.USER_DEFINED_EVENT
-
-    @property
-    def event_type(self) -> str:
-        """Returns the user-defined event type (first field)."""
-        return self._fields[0] if self._fields else ""
-
-    @property
-    def data(self) -> list[str]:
-        """Returns remaining payload fields for the event."""
-        return self._fields[1:]
 
 
 class GetContentDetails(Request):
@@ -1313,6 +1288,24 @@ class CinemascapeMask(Response):
     def field(self) -> int:
         """Returns cinemascape mask."""
         return int(self._fields[0])
+
+
+class SendEvent(Request):
+    """Class for SEND_EVENT messages."""
+
+    name = const.SEND_EVENT
+
+
+@register
+class UserDefinedEvent(Response):
+    """Class for USER_DEFINED_EVENT messages."""
+
+    name = const.USER_DEFINED_EVENT
+
+    @property
+    def fields(self) -> list[str]:
+        """Returns fields in the message."""
+        return self._fields[0].split("=")
 
 
 class EnableEvents(Request):
