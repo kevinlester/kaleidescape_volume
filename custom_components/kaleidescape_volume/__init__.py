@@ -76,7 +76,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     repeat_mgr = VolumeRepeatManager(hass, repeat_interval)
 
     
-    def _handle_event(event: str, params: list[str] = None) -> None::
+    def _handle_event(event: str, params: list[str] = None) -> None:
 
         """Handle only the Kaleidescape volume button events."""
         if event != const.USER_DEFINED_EVENT:
