@@ -22,7 +22,6 @@ _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "kaleidescape_volume"
 
-
 CONF_REPEAT_INTERVAL = "repeat_interval"
 DEFAULT_REPEAT_INTERVAL = 0.25 # default seconds between repeated HA events
 
@@ -77,7 +76,6 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     
     def _handle_event(event: str, params: list[str] = None) -> None:
-
         """Handle only the Kaleidescape volume button events."""
         if event != const.USER_DEFINED_EVENT:
             return
