@@ -1,5 +1,5 @@
 # kaleidescape_volume
-Minimal Home Assistant custom integration to enable a Kaleidescape remote to control another components volume.  Your Kaleidescape's remote must have volume buttons, of course.
+Minimal Home Assistant custom integration to enable a Kaleidescape remote to control another components volume.  Your Kaleidescape's remote must have volume buttons, of course.  This is built off an updated fork of [PyKaleidescape](https://github.com/SteveEasley/pykaleidescape), and is hopefully temporary since I am trying to get this functionality added into that repo, and subsequently into HA core so that it will be available to all via the included HA core Kaleidescape integration.  Until that happens, you can enjoy controlling volume using this repo.
 
 ## Installation
 1). Install via HACS: [![Open this repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=kevinlester&repository=kaleidescape_volume&category=integration)
