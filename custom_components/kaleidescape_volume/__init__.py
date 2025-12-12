@@ -13,7 +13,6 @@ from .volume_repeat import VolumeRepeatManager
 from .bridge import (
     connect_device,
     connect_dispatcher,
-    enable_volume_events_if_supported,
     disconnect_dispatcher,
     disconnect_device,
 )
@@ -21,16 +20,8 @@ from .bridge import (
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "kaleidescape_volume"
-
 CONF_REPEAT_INTERVAL = "repeat_interval"
 DEFAULT_REPEAT_INTERVAL = 0.25 # default seconds between repeated HA events
-
-VOLUME_EVENTS = {
-    "USER_DEFINED_EVENT:VOLUME_UP_PRESS",
-    "USER_DEFINED_EVENT:VOLUME_UP_RELEASE",
-    "USER_DEFINED_EVENT:VOLUME_DOWN_PRESS",
-    "USER_DEFINED_EVENT:VOLUME_DOWN_RELEASE",
-}
 
 CONFIG_SCHEMA = vol.Schema(
     {
@@ -120,6 +111,5 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         return False
 
     connection = connect_dispatcher(device, _handle_event)
-    await enable_volume_events_if_supported(device)
 
     return True

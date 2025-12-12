@@ -36,22 +36,6 @@ def connect_dispatcher(device: Any, callback: Callable[[Any], None]) -> Optional
         return None
 
 
-async def enable_volume_events_if_supported(device: Any) -> None:
-    """Request volume events if the device exposes enable_volume_events."""
-    if not hasattr(device, "enable_volume_events"):
-        _LOGGER.info(
-            "Device does not support enable_volume_events; "
-            "not requesting volume events"
-        )
-        return
-
-    try:
-        await device.enable_volume_events()  # type: ignore[attr-defined]
-        _LOGGER.info("Requested Kaleidescape volume events")
-    except Exception:  # noqa: BLE001
-        _LOGGER.exception("Failed to enable volume events")
-
-
 def disconnect_dispatcher(connection: Optional[Any]) -> None:
     """Unsubscribe the dispatcher listener if a connection exists."""
     if connection is None:
